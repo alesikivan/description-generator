@@ -9,7 +9,7 @@ class ContentController {
       {
         const { link } = req.body
 
-        const browser = await puppeteer.launch()
+        const browser = await puppeteer.launch({ headless: 'new' })
         const page = await browser.newPage()
 
         const response = await page.goto(link, { waitUntil: 'networkidle2' })
