@@ -109,9 +109,81 @@ class ContentController {
         const keywords = getKeywordsFromBrackets(bracketsText)
 
         const clientResponse = { description: description, keywords }
-        if (mode === 'TEST_MODE' ) clientResponse.abstract = chatContent      
+        if (mode === 'TEST_MODE') clientResponse.abstract = chatContent
 
         return res.status(200).json(clientResponse)
+      }
+    } catch (err) {
+      console.log(err)
+      return res.status(400).json({ message: 'Failed to get web page description. Reload a page and try again.', })
+    }
+  }
+
+  async getClustersDescription(req, res) {
+    try {
+      {
+        // [ { id: 1, keywords: [...] }, ... ]
+        const { clusters } = req.body
+
+
+        // return res.status(400).json({ message: 'remove later' })
+
+        const systemContent = `
+          You are an AI that generates a topic name and short description based on given keywords.
+          These keywords have been preprocessed; they are lemmatized and stop words have been removed.
+          In addition, please check the keywords for potential spelling mistakes and correct them if necessary.
+          Take all this into account when generating the output.
+          Show only anwer. Output such a string as json so that I can immediately put it in the JSON.parse method.
+          For example. You will get arr array to input: [
+            {
+              id: 1,
+              keywords: 'doctor, surgeon, hospital'
+            },
+            {
+              id: 2,
+              keywords: 'integral, integral, theorem'
+            }
+          ]
+          To output: [
+            {
+              id: 1,
+              topic: 'Medecine'
+              description: 'This topic explores the advancements in surgical techniques and practices that have emerged over the years within hospital settings. It delves into the critical role of doctors, particularly surgeons, in pioneering and adopting innovative procedures to enhance patient outcomes.'
+            },
+            {
+              id: 2,
+              topic: 'Math Fundamental'
+              description: 'The topic focuses on the fundamental theorem of calculus, an essential concept in mathematics that connects differentiation and integration. It explains how integrals play a crucial role in finding areas, computing accumulations, and solving various real-world problems.'
+            },
+          ]
+        `
+
+        const userContent = `
+          Input: ${JSON.stringify(clusters, null, 2)}
+        `
+
+        const messages = [
+          {
+            role: 'system',
+            content: systemContent
+          },
+          { role: "user", content: userContent }
+        ]
+
+        const configuration = new Configuration({
+          apiKey: process.env.OPENAI_API_KEY,
+        })
+
+        const openai = new OpenAIApi(configuration)
+
+        const completion = await openai.createChatCompletion({
+          model: "gpt-3.5-turbo",
+          messages
+        })
+
+        let [{ message: { content: description } }] = completion.data.choices
+
+        return res.status(200).json({ clusters: JSON.parse(description) })
       }
     } catch (err) {
       console.log(err)

@@ -6,4 +6,6 @@ const router = new Router()
 
 router.post('/auto-generate', controller.autoGenerate)
 
+router.post('/clusters-description', controller.getClustersDescription)
+
 export default router
