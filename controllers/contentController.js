@@ -122,12 +122,9 @@ class ContentController {
   async getClustersDescription(req, res) {
     try {
       {
-        // [ { id: 1, keywords: [...] }, ... ]
+        // [ { id: 1, keywords: 'doctor, surgeon, hospital' }, ... ]
         const { clusters } = req.body
-
-
-        // return res.status(400).json({ message: 'remove later' })
-
+        
         const systemContent = `
           You are an AI that generates a topic name and short description based on given keywords.
           These keywords have been preprocessed; they are lemmatized and stop words have been removed.
@@ -147,12 +144,12 @@ class ContentController {
           To output: [
             {
               id: 1,
-              topic: 'Medecine'
+              topic: 'Medicine',
               description: 'This topic explores the advancements in surgical techniques and practices that have emerged over the years within hospital settings. It delves into the critical role of doctors, particularly surgeons, in pioneering and adopting innovative procedures to enhance patient outcomes.'
             },
             {
               id: 2,
-              topic: 'Math Fundamental'
+              topic: 'Math Fundamental',
               description: 'The topic focuses on the fundamental theorem of calculus, an essential concept in mathematics that connects differentiation and integration. It explains how integrals play a crucial role in finding areas, computing accumulations, and solving various real-world problems.'
             },
           ]
