@@ -130,6 +130,7 @@ class ContentController {
           These keywords have been preprocessed; they are lemmatized and stop words have been removed.
           In addition, please check the keywords for potential spelling mistakes and correct them if necessary.
           Take all this into account when generating the output.
+          Try to make topics as distinguishable as possible, so they won't be equal to each other.
           Show only anwer. Output such a string as json so that I can immediately put it in the JSON.parse method.
           For example. You will get arr array to input: [
             {
