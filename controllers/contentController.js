@@ -77,8 +77,9 @@ class ContentController {
               Also add at least 5 words describing this site to the end start with "[" and end with "]". For example [Medicine, Surgical operation, Advances in Medicine, ...]. 
               When processing content, skip all service information, such as cookies and the like.
               If the information (words) is not enough, then try to improvise, write from yourself.
-              Start your request from the words like: "The webpage is about...".
-              You need write only the answer, for exmaple: Story is about how surgeons performed the operation. [Medicine, Surgical operation, Advances in Medicine, ...].
+              Try to make the answer as short as possible, but express its essence to the maximum.
+	            Do not start the response from text like "This website is about"..., just get straight to the point of the topic.
+              You need write only the answer, for exmaple: Surgeons performed the operation using the latest advances in medical technology, which made it possible to minimize the patient’s recovery time. Thanks to their high qualifications and innovative treatment methods, the results of the operation exceeded all expectations. [Medicine, Surgical operation, Advances in Medicine, ...].
             `
           },
           {
