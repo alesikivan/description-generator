@@ -18,13 +18,18 @@ class ContentController {
         const page = await browser.newPage()
 
         const response = await page.goto(link.trim(), { waitUntil: 'networkidle2' })
+        
+        //
+        // const cont = await page.content()
+        // console.log(cont)
+        //
 
         if (response.status() >= 400) {
           await browser.close()
           return res.status(400).json({ message: `Website returned HTTP status ${response.status()}` })
         }
 
-        const content = await page.evaluate(() => {
+        let content = await page.evaluate(() => {
           const tags = 'title, meta, h1, h2, h3, p, span, ul, ol, li, section, article'
           const importantElements = document.querySelectorAll(tags)
 
@@ -32,15 +37,30 @@ class ContentController {
             const tagName = element.tagName.toLowerCase()
             const textContent = element.textContent.trim()
 
+            if (tagName === 'meta' && element.name === 'description') 
+              return { tag: tagName, content: element.content, type: 'description' }
+
             return { tag: tagName, content: textContent }
           })
         })
 
+
+        let metaDescriptionTag = content.find(tag => tag.type && tag.type === 'description')
+        let metaDescription = metaDescriptionTag ? metaDescriptionTag.content : ''
+
+        // Чистим от лишнего описания
+        if (metaDescriptionTag)
+          content = content.filter(tag => {
+            if (tag.type && tag.type === 'description') {
+              return false
+            }
+            
+            return true  
+          })
+
         await browser.close()
 
         let titleTag = content.find(item => item.tag === 'title')
-
-        // let headerTag = content.find(item => item.tag === 'h1')
 
         let abstract = content
           .filter(item => item.content.trim())
@@ -63,11 +83,13 @@ class ContentController {
         //   ? `The main header on webiste is "${headerTag.content.trim()}".`
         //   : ''
 
+        const preparedDescriptionContent = metaDescription ? `The website description: ${metaDescription}` : ''
+
         const chatContent = `
           ${title}
+          ${preparedDescriptionContent}
           The content of webpage: ${abstract}.
         `
-
         const messages = [
           {
             role: 'system',
@@ -94,7 +116,7 @@ class ContentController {
         const openai = new OpenAIApi(configuration)
 
         const completion = await openai.createChatCompletion({
-          model: "gpt-3.5-turbo",
+          model: "gpt-4o-mini",
           messages
         })
 
@@ -125,7 +147,7 @@ class ContentController {
       {
         // [ { id: 1, keywords: 'doctor, surgeon, hospital' }, ... ]
         const { clusters } = req.body
-        
+
         const systemContent = `
           You are an AI that generates a topic name and short description based on given keywords.
           These keywords have been preprocessed; they are lemmatized and stop words have been removed.
@@ -189,6 +211,41 @@ class ContentController {
       return res.status(400).json({ message: 'Failed to get web page description. Reload a page and try again.', })
     }
   }
+
+  // Маршрут для предрендеринга
+  // async render(req, res) {
+  //   // const { url } = req.query
+
+  //   const url = 'http://localhost:3000/news'
+
+  //   if (!url) {
+  //     return res.status(400).send('Please provide a URL parameter.')
+  //   }
+
+  //   try {
+  //     const content = await renderPage(url)
+  //     res.send(content)
+  //   } catch (error) {
+  //     console.error('Error rendering page:', error)
+  //     res.status(500).send('Error rendering page.')
+  //   }
+  // }
 }
+
+// async function renderPage(url) {
+//   const browser = await puppeteer.launch({
+//     headless: 'new',
+//     args: ['--no-sandbox'],
+//   })
+//   const page = await browser.newPage()
+
+//   await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 local-mda-server')
+
+//   await page.goto(url, { waitUntil: 'networkidle2' })
+
+//   const content = await page.content()
+
+//   return content
+// }
 
 export default new ContentController()
