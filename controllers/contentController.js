@@ -18,7 +18,7 @@ class ContentController {
         const page = await browser.newPage()
 
         const response = await page.goto(link.trim(), { waitUntil: 'networkidle2' })
-        
+
         //
         // const cont = await page.content()
         // console.log(cont)
@@ -37,7 +37,7 @@ class ContentController {
             const tagName = element.tagName.toLowerCase()
             const textContent = element.textContent.trim()
 
-            if (tagName === 'meta' && element.name === 'description') 
+            if (tagName === 'meta' && element.name === 'description')
               return { tag: tagName, content: element.content, type: 'description' }
 
             return { tag: tagName, content: textContent }
@@ -54,8 +54,8 @@ class ContentController {
             if (tag.type && tag.type === 'description') {
               return false
             }
-            
-            return true  
+
+            return true
           })
 
         await browser.close()
@@ -132,6 +132,150 @@ class ContentController {
         const keywords = getKeywordsFromBrackets(bracketsText)
 
         const clientResponse = { description: description, keywords }
+        if (mode === 'TEST_MODE') clientResponse.abstract = chatContent
+
+        return res.status(200).json(clientResponse)
+      }
+    } catch (err) {
+      console.log(err)
+      return res.status(400).json({ message: 'Failed to get web page description. Reload a page and try again.', })
+    }
+  }
+
+  async cliporyAutoGenerate(req, res) {
+    try {
+      {
+        const {
+          link,
+          mode = 'PROD_MODE',
+          groups = []
+        } = req.body
+
+        const browser = await puppeteer.launch({
+          headless: 'new',
+          args: ['--no-sandbox'],
+        })
+        const page = await browser.newPage()
+
+        const response = await page.goto(link.trim(), { waitUntil: 'networkidle2' })
+
+        //
+        // const cont = await page.content()
+        // console.log(cont)
+        //
+
+        if (response.status() >= 400) {
+          await browser.close()
+          return res.status(400).json({ message: `Website returned HTTP status ${response.status()}` })
+        }
+
+        let content = await page.evaluate(() => {
+          const tags = 'title, meta, h1, h2, h3, p, span, ul, ol, li, section, article'
+          const importantElements = document.querySelectorAll(tags)
+
+          return Array.from(importantElements).map(element => {
+            const tagName = element.tagName.toLowerCase()
+            const textContent = element.textContent.trim()
+
+            if (tagName === 'meta' && element.name === 'description')
+              return { tag: tagName, content: element.content, type: 'description' }
+
+            return { tag: tagName, content: textContent }
+          })
+        })
+
+
+        let metaDescriptionTag = content.find(tag => tag.type && tag.type === 'description')
+        let metaDescription = metaDescriptionTag ? metaDescriptionTag.content : ''
+
+        // Чистим от лишнего описания
+        if (metaDescriptionTag)
+          content = content.filter(tag => {
+            if (tag.type && tag.type === 'description') {
+              return false
+            }
+
+            return true
+          })
+
+        await browser.close()
+
+        let titleTag = content.find(item => item.tag === 'title')
+
+        let abstract = content
+          .filter(item => item.content.trim())
+          .map(item => {
+            let replacement = replaceAll(item.content, /\n/g, '')
+            replacement = replaceAll(replacement, /\s+/g, ' ')
+
+            return replacement.toLowerCase()
+          })
+
+        abstract = getUnique(abstract)
+          .join(' ')
+          .slice(0, 4_000)
+
+        const title = titleTag && titleTag.content.trim()
+          ? `The title of webiste is "${titleTag.content.trim()}".`
+          : ''
+
+        // const header = headerTag && headerTag.content.trim()
+        //   ? `The main header on webiste is "${headerTag.content.trim()}".`
+        //   : ''
+
+        const preparedDescriptionContent = metaDescription ? `The website description: ${metaDescription}` : ''
+
+        const chatContent = `
+          ${title}
+          ${preparedDescriptionContent}
+          Groups: ${groups.join(', ')}.
+          The content of webpage: ${abstract}.
+        `
+        const messages = [
+          {
+            role: 'system',
+            content: `
+              You are a system for recognizing the topic of web pages by webpage content.
+              You will get some words from website and users created titles of group and you need to recognizing the main sence and return about 3 sentences what it about.
+              Also select existing from the passed list or create one title of group which describing this site. Put it to "[]" brackets. For example [Medicine]. But if the text is not valid and you couldn't recognize it, then just return ['null'].
+              When processing content, skip all service information, such as cookies and the like.
+              If the information (words) is not enough, then try to improvise, write from yourself.
+              Try to make the answer as short as possible, but express its essence to the maximum.
+	            Do not start the response from text like "This website is about"..., just get straight to the point of the topic.
+              You need write only the answer, for exmaple: Surgeons performed the operation using the latest advances in medical technology, which made it possible to minimize the patient’s recovery time. Thanks to their high qualifications and innovative treatment methods, the results of the operation exceeded all expectations. [Medicine].
+            `
+          },
+          {
+            role: "user", content: chatContent
+          }
+        ]
+
+        const configuration = new Configuration({
+          apiKey: process.env.OPENAI_API_KEY,
+        })
+
+        const openai = new OpenAIApi(configuration)
+
+        const completion = await openai.createChatCompletion({
+          model: "gpt-4o-mini",
+          messages
+        })
+
+        let [{ message: { content: description } }] = completion.data.choices
+
+        // Получаем текст [...]
+        const bracketsText = getTextFromBrackets(description)
+
+        // Удаляем ключевые слова [...] в конце предложения
+        description = description.replace(bracketsText, '').trim()
+
+        // Получаем ключевые слова по [...]
+        const keywords = getKeywordsFromBrackets(bracketsText)
+
+        const clientResponse = {
+          description: description.endsWith(' .') ? description.replace(' .', '') : description,
+          groups: keywords
+        }
         if (mode === 'TEST_MODE') clientResponse.abstract = chatContent
 
         return res.status(200).json(clientResponse)
