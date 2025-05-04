@@ -4,6 +4,15 @@ import puppeteer from "puppeteer"
 import { Configuration, OpenAIApi } from "openai"
 
 import { getKeywordsFromBrackets, getTextFromBrackets, getUnique, replaceAll } from '../utils/content.js'
+import { randomTopic } from '../utils/random.js'
+import { JavaScriptTopics } from '../modules/braavo/javascript.js'
+import { PythonTopics } from '../modules/braavo/python.js'
+import { sqlTopics } from '../modules/braavo/sql.js'
+import { phpTopics } from '../modules/braavo/php.js'
+import { nodeJsTopics } from '../modules/braavo/node.js'
+import { htmlTopics } from '../modules/braavo/html.js'
+import Question from '../db/mongo/models/Question.js'
+import { BehaviorTopics, SystemDesignTopics, TeamworkTopics, TimeManagementTopics } from '../modules/braavo/soft.js'
 
 class ContentController {
   async autoGenerate(req, res) {
@@ -355,6 +364,148 @@ class ContentController {
       return res.status(400).json({ message: 'Failed to get web page description. Reload a page and try again.', })
     }
   }
+
+  async questionsGenerator(req, res) {
+    try {
+      const { level, skill, questionType } = req.body
+
+      let topic = ''
+      switch (skill) {
+        case 'JavaScript':
+          topic = randomTopic(JavaScriptTopics)
+          break;
+
+        case 'Python':
+          topic = randomTopic(PythonTopics)
+          break;
+
+        case 'SQL':
+          topic = randomTopic(sqlTopics)
+          break;
+
+        case 'PHP':
+          topic = randomTopic(phpTopics)
+          break;
+
+        case 'Node.js':
+          topic = randomTopic(nodeJsTopics)
+          break;
+
+        case 'HTML':
+          topic = randomTopic(htmlTopics)
+          break;
+
+        // Soft Skills
+        case 'Time Management':
+          topic = randomTopic(TimeManagementTopics)
+          break;
+        case 'Teamwork':
+          topic = randomTopic(TeamworkTopics)
+          break;
+        case 'System Design':
+          topic = randomTopic(SystemDesignTopics)
+          break;
+        case 'Behavior':
+          topic = randomTopic(BehaviorTopics)
+          break;
+
+        default:
+          topic = ''
+      }
+
+      let questionTypeDescription = ''
+      switch (questionType) {
+        case 'Find the Error':
+          questionTypeDescription = 'The question should be based on finding the error.'
+          break;
+
+        case 'Continue the Code':
+          questionTypeDescription = 'The question must have a gap (____) in the code. And accordingly, the missing fragment must be one of the answers.'
+          break;
+      }
+
+      const isSoftSkill = ['Time Management', 'Teamwork', 'System Design', 'Behavior'].includes(skill);
+
+      const systemContent = isSoftSkill
+        ? `
+    You are an experienced HR and tech leader.
+    You are interviewing a ${level} candidate to assess their "${skill}" skill.
+    Focus on behavioral or situational questions, possibly related to '${topic}'.
+    Make the question realistic and relevant to day-to-day work scenarios.
+    Do not include the correct answer first in answersOptions.
+    Adjust complexity to the candidate's level. Intern = simple scenarios. Senior = complex team dynamics or leadership.
+    `
+        : `
+    You are an IT expert.
+    You are interviewing a ${level} candidate for a ${skill} developer position.
+    ${questionTypeDescription}
+    Try to come up with something new, not standard questions.
+    ${topic ? `Ask a question about '${topic}.'` : ''}
+    Do not put the correct answer first on the answer answersOptions!
+    Please consider the level of the candidate. If it is a Intern, then the questions should not be difficult, but if it is an Senior, the question must be difficult and so on.
+    `;
+
+      const userContent = isSoftSkill
+        ? `Generate a behavioral or situational multiple-choice question in JSON format with the following structure:
+{
+  "question": "The description of the soft skill scenario or question",
+  "answersOptions": ["option1", "option2", "option3", "option4"],
+  "trueAnswer": "correct option",
+  "explanation": "why this is the right choice (use <b></b> to highlight key points)"
+}
+Return ONLY valid JSON. Do NOT include any explanations or extra text. The client will parse the result using JSON.parse().`
+        : `Generate a real-life programming question (The answersOptions option should include pre-written answers) in JSON format with the following structure:
+{
+  "question": "The description of question",
+  "code": "task code or example of task code (do not show here true answer)",
+  "answersOptions": ["answer1", "answer2", ...],
+  "trueAnswer": "answer1",
+  "explanation": "some answer (use <b></b> to highlight key parts)"
+}
+Return ONLY valid JSON. Do NOT include any explanations or extra text. The client will parse the result using JSON.parse().`;
+
+
+      const messages = [
+        { role: 'system', content: systemContent },
+        { role: 'user', content: userContent }
+      ];
+
+      const configuration = new Configuration({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+
+      const openai = new OpenAIApi(configuration);
+
+      const completion = await openai.createChatCompletion({
+        model: "gpt-3.5-turbo",
+        messages,
+        temperature: 0.8, // Повышаем "творчество"
+        top_p: 1
+      });
+
+      let content = completion.data.choices[0].message.content.trim();
+
+      // Убираем возможные ```json или ``` вокруг
+      if (content.startsWith("```")) {
+        content = content.replace(/```(?:json)?/g, "").trim();
+      }
+
+      const parsed = JSON.parse(content);
+
+      const question = new Question({ ...parsed, level, skill, questionType, topic })
+      const savedQuestion = await question.save()
+
+      if (savedQuestion) {
+        parsed.id = savedQuestion._id
+      }
+
+      return res.status(200).json(parsed);
+    } catch (err) {
+      console.error("Question generation error:", err);
+      return res.status(400).json({ message: 'Failed to generate question. Please try again.' });
+    }
+  }
+
 
   // Маршрут для предрендеринга
   // async render(req, res) {

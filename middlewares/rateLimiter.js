@@ -61,3 +61,44 @@ export async function rateLimiter(req, res, next) {
 
   next()
 }
+
+
+export async function braavoRateLimiter(req, res, next) {
+  const {
+    fullAccessKey = ''
+  } = req.body
+
+  // Проверка на ключ для полного доступа
+  if (fullAccessKey) {
+    if (isValidFullAccessKey(fullAccessKey) === false) {
+      return res.status(400).json({ message: `Invalid full access key.`})
+    } else {
+      next()
+      return
+    }
+  }
+
+  const ip = getClientIp(req) // Получаем IP пользователя
+  const key = `braavo-rate-limit:${ip}`
+
+  // Узнаем, сколько запросов уже есть в Redis
+  const requests = await redis.incr(key)
+
+  if (requests === 1) {
+    // Устанавливаем TTL на первый запрос (сбрасывается через 30 минут)
+    await redis.expire(key, WINDOW)
+  }
+
+  if (requests > LIMIT) {
+    // Узнаем, сколько времени осталось до сброса лимита
+    const ttl = await redis.ttl(key)
+    const unlockTime = new Date(Date.now() + ttl * 1000).toISOString()
+
+    return res.status(429).json({
+      message: `Too many requests. Try again in ${ttl} seconds.`,
+      unlockAt: unlockTime
+    })
+  }
+
+  next()
+}

@@ -7,6 +7,7 @@ import fs from 'fs'
 import path from 'path'
 
 import routes from './routes/routes.js'
+import mongoose from 'mongoose'
 
 const app = express()
 
@@ -34,6 +35,8 @@ app.get('*', async (req, res) => res.json({ message: 'Page not found' }))
 
 const startServer = async () => {
   const PORT = process.env.PORT || 80
+
+  await mongoose.connect(process.env.MONGO_TOKEN)
 
   app.listen(PORT, () => {
     console.log(`Success server has started on port ${PORT}`)
